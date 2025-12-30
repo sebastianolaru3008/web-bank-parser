@@ -1,5 +1,7 @@
 # web-bank-parser
 
+> ⚠️ This is a WIP project; expect breaking changes. Ignore for now the README and code structure.
+
 Full-stack web app to parse and categorize bank records using wildcard rules.
 
 ## Stack
