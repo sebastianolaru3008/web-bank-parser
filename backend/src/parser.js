@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import pdfParse from 'pdf-parse';
 // PDF.js for password-protected PDFs
+import crypto from 'crypto';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import XLSX from 'xlsx';
 import { patternToRegex } from './rules.js';
@@ -85,13 +86,26 @@ export async function parseUploadAndCategorize(filePath, originalName, rules, op
     return { ...tx, category };
   });
 
+  // Attach stable IDs to each transaction to enable reliable identification
+  const withId = categorized.map((tx, idx) => ({ id: makeId(tx, idx), ...tx }));
+
   const totals = {};
-  for (const tx of categorized) {
+  for (const tx of withId) {
     const key = tx.category || 'Uncategorized';
     totals[key] = (totals[key] || 0) + (Number.isFinite(tx.amount) ? tx.amount : 0);
   }
 
-  return { count: categorized.length, items: categorized, totals };
+  return { count: withId.length, items: withId, totals };
+}
+
+function makeId(tx, idx){
+  try {
+    const base = `${tx.date ?? ''}|${tx.description ?? ''}|${Number(tx.amount) || 0}|${idx}`;
+    const h = crypto.createHash('sha1').update(base).digest('hex').slice(0, 12);
+    return `tx_${h}`;
+  } catch {
+    return `tx_${idx}`;
+  }
 }
 
 function normalizeAmount(raw) {
@@ -126,14 +140,26 @@ function linesToRows(lines) {
   const dateRe = /\b(\d{2}[.\/-]\d{2}[.\/-]\d{2,4}|\d{4}-\d{2}-\d{2})\b/;
   const amountRe = /([+-]?[0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{2})|[+-]?[0-9]+(?:[.,][0-9]{2}))/;
   const rows = [];
+  let lastRow = null;
   for (const line of lines) {
     const dMatch = line.match(dateRe);
     const aMatch = line.match(new RegExp(amountRe.source + '$'));
-    if (!dMatch || !aMatch) continue;
-    const date = dMatch[0];
-    const amountStr = aMatch[0];
-    const desc = line.replace(date, '').replace(aMatch[0], '').replace(/\s{2,}/g, ' ').trim();
-    rows.push({ date, description: desc, amount: normalizeAmount(amountStr) });
+    if (dMatch && aMatch) {
+      const date = dMatch[0];
+      const amountStr = aMatch[0];
+      const desc = line.replace(date, '').replace(aMatch[0], '').replace(/\s{2,}/g, ' ').trim();
+      const row = { date, description: desc, amount: normalizeAmount(amountStr) };
+      rows.push(row);
+      lastRow = row;
+    } else if (!dMatch && !aMatch) {
+      // Continuation line: append extra merchant/details text to previous row
+      if (lastRow) {
+        const extra = line.trim();
+        if (extra) lastRow.description = (lastRow.description ? lastRow.description + ' ' : '') + extra;
+      }
+    } else {
+      // Lines with only date or only amount are ignored
+    }
   }
   return rows;
 }
@@ -177,7 +203,7 @@ function linesToRowsFromItems(lines) {
   const amountTailRe = /([+-]?[0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{2})|[+-]?[0-9]+(?:[.,][0-9]{2}))$/;
   const amountExactRe = new RegExp('^' + amountTailRe.source + '$');
   const rows = [];
-  let lastPending = null; // row with empty description to be continued
+  let lastRow = null; // most recent transaction row
   for (const line of lines) {
     const text = line.items.map((i) => i.str).join(' ').replace(/\s{2,}/g, ' ').trim();
     if (!text) continue;
@@ -199,17 +225,17 @@ function linesToRowsFromItems(lines) {
       let desc = mid.map((i) => i.str).join(' ').replace(/\s{2,}/g, ' ').trim();
       const row = { date, description: desc, amount: normalizeAmount(amountStr) };
       rows.push(row);
-      // If description is empty, mark as pending continuation
-      lastPending = (!desc || desc.length === 0) ? row : null;
+      // Always track the last row so we can append merchant info from following lines
+      lastRow = row;
     } else if (!dMatch && !aMatch) {
-      // Potential continuation line: no date and no trailing amount
-      if (lastPending) {
+      // Continuation line: no date and no trailing amount -> append to previous row's description
+      if (lastRow) {
         const extra = text;
-        lastPending.description = (lastPending.description ? lastPending.description + ' ' : '') + extra;
+        if (extra) lastRow.description = (lastRow.description ? lastRow.description + ' ' : '') + extra;
       }
     } else {
-      // Lines with only date or only amount are less useful; ignore
-      lastPending = null;
+      // Lines with only date or only amount are less useful; ignore and reset
+      // Do not reset lastRow; we might still get more appended lines later
     }
   }
   return rows;

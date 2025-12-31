@@ -12,7 +12,10 @@ const config = {
         changeOrigin: true,
         secure: false
       }
-    }
+    },
+    allowedHosts:[
+        "a3b3d848e87a.ngrok-free.app"
+    ]
   }
 };
 

@@ -5,7 +5,7 @@ import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { parseUploadAndCategorize } from './parser.js';
-import { loadRules } from './rules.js';
+import { addRule, loadRules, removeRule } from './rules.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -47,6 +47,35 @@ app.get('/api/rules', async (req, res) => {
     res.json({ lang, count: rules.length, rules });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/rules', async (req, res) => {
+  try {
+    const lang = (req.query.lang || req.body?.lang || 'en').toString();
+    const pattern = (req.body?.pattern || '').toString();
+    const category = (req.body?.category || '').toString();
+    const rules = await addRule(lang, { pattern, category });
+    res.json({ lang, count: rules.length, rules });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete('/api/rules', async (req, res) => {
+  try {
+    const lang = (req.query.lang || req.body?.lang || 'en').toString();
+    const idxRaw = req.query.index ?? req.body?.index;
+    const patRaw = req.query.pattern ?? req.body?.pattern;
+    let query;
+    if (idxRaw != null) query = Number(idxRaw);
+    else if (patRaw) query = patRaw.toString();
+    else if (req.body && typeof req.body === 'object') query = req.body;
+    else throw new Error('index or pattern is required');
+    const rules = await removeRule(lang, query);
+    res.json({ lang, count: rules.length, rules });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
   }
 });
 

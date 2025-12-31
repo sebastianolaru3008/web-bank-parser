@@ -1,9 +1,14 @@
 <script>
+  import { tt } from '$lib/i18n';
+  import { lang } from '$lib/stores/lang';
+  import { formatAmount } from '$lib/utils/format.js';
   export let items = [];
   export let filterCategory = '';
   export let search = '';
   let sortKey = 'date';
   let sortDir = 'desc';
+
+  $: _lang = $lang; // rerender on language change
 
   function setSort(k) {
     if (sortKey === k) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
@@ -27,11 +32,12 @@
   }
 
   $: shown = [...filtered].sort((a,b)=> sortDir==='asc' ? cmp(a,b) : cmp(b,a));
+  $: sumShown = shown.reduce((s,it)=> s + (Number(it.amount)||0), 0);
 </script>
 
 <div class="controls">
   <slot name="filters" />
-  <div class="count">{shown.length} items</div>
+  <div class="count">{shown.length} {tt($lang, 'table.items')}</div>
   <div style="flex:1"></div>
   <slot name="actions" />
   
@@ -41,10 +47,10 @@
   <table>
     <thead>
       <tr>
-        <th><button on:click={() => setSort('date')}>Date</button></th>
-        <th><button on:click={() => setSort('description')}>Description</button></th>
-        <th class="num"><button on:click={() => setSort('amount')}>Amount</button></th>
-        <th><button on:click={() => setSort('category')}>Category</button></th>
+        <th><button on:click={() => setSort('date')}>{tt($lang, 'table.date')} {sortKey==='date' ? (sortDir==='asc' ? '▲' : '▼') : ''}</button></th>
+        <th><button on:click={() => setSort('description')}>{tt($lang, 'table.description')} {sortKey==='description' ? (sortDir==='asc' ? '▲' : '▼') : ''}</button></th>
+        <th class="num"><button on:click={() => setSort('amount')}>{tt($lang, 'table.amount')} {sortKey==='amount' ? (sortDir==='asc' ? '▲' : '▼') : ''}</button></th>
+        <th><button on:click={() => setSort('category')}>{tt($lang, 'table.category')} {sortKey==='category' ? (sortDir==='asc' ? '▲' : '▼') : ''}</button></th>
       </tr>
     </thead>
     <tbody>
@@ -52,25 +58,30 @@
         <tr>
           <td>{it.date}</td>
           <td>{it.description}</td>
-          <td class="num">{(Number(it.amount)||0).toFixed(2)}</td>
+          <td class="num">{formatAmount(it.amount)}</td>
           <td>{it.category}</td>
         </tr>
       {/each}
     </tbody>
   </table>
   {#if shown.length === 0}
-    <div class="empty">No items</div>
+    <div class="empty">{tt($lang, 'table.no_items')}</div>
+  {/if}
+  {#if shown.length > 0}
+    <div class="summary">{tt($lang, 'table.sum_shown')}: <strong>{formatAmount(sumShown)}</strong></div>
   {/if}
 </div>
 
 <style>
   .controls { display: flex; gap: .5rem; align-items: center; margin: .5rem 0; }
   .count { opacity: .7; }
-  .table-wrap { width: 100%; overflow: auto; border: 1px solid #e2e2e2; border-radius: 8px; }
+  .table-wrap { width: 100%; overflow: auto; border: 1px solid var(--border-color); border-radius: 8px; background: var(--card-bg); }
   table { width: 100%; border-collapse: collapse; }
-  th, td { padding: .5rem .6rem; border-bottom: 1px solid #eee; text-align: left; }
+  th, td { padding: .5rem .6rem; border-bottom: 1px solid var(--border-color); text-align: left; }
   th .num, td.num { text-align: right; }
-  thead th { position: sticky; top: 0; background: var(--th-bg, #fafafa); }
+  thead th { position: sticky; top: 0; background: var(--th-bg); }
   th button { background: none; border: none; cursor: pointer; font-weight: 600; }
   .empty { padding: 1rem; text-align: center; }
+  tbody tr:nth-child(odd) { background: var(--row-alt); }
+  .summary { padding: .5rem .75rem; border-top: 1px solid var(--border-color); display:flex; justify-content:flex-end; }
 </style>

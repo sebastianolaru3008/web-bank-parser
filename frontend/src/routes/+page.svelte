@@ -1,72 +1,33 @@
 <script>
-  import ItemsTable from '$lib/components/ItemsTable.svelte';
-  import Totals from '$lib/components/Totals.svelte';
   import UploadForm from '$lib/components/UploadForm.svelte';
+  import { tt } from '$lib/i18n';
+  import { lang } from '$lib/stores/lang';
 
-  let lang = 'en';
-  let result = null;
-  let error = '';
-  let search = '';
-  let selectedCategory = '';
+  $: _lang = $lang; // trigger rerender when language changes
+
 
   function onResult(data) {
-    error = '';
-    result = data;
-    const firstCat = Object.keys(data.totals || {})[0];
-    selectedCategory = '';
-  }
-
-  function clearAll() {
-    result = null;
-    search = '';
-    selectedCategory = '';
-  }
-
-  function exportCSV() {
-    import('$lib/utils/csv.js').then(({ toCSV, download }) => {
-      const csv = toCSV(result.items, ['date', 'description', 'amount', 'category']);
-      download(`bank-records-${new Date().toISOString().slice(0,10)}.csv`, csv);
-    });
+    try {
+      sessionStorage.setItem('parseResult', JSON.stringify(data));
+    } catch {}
+    if (typeof window !== 'undefined') {
+      window.location.href = '/analysis';
+    }
   }
 </script>
 
 <main>
-  <h1>Bank Record Parser</h1>
-
-  <UploadForm {lang} onResult={onResult} />
-
-  {#if error}
-    <p style="color:red">{error}</p>
-  {/if}
-
-  {#if result}
-    <Totals totals={result.totals}>
-      <div style="display:flex; gap:.5rem; align-items:center;">
-        <label>Filter by category
-          <select bind:value={selectedCategory}>
-            <option value="">All</option>
-            {#each Object.keys(result.totals || {}) as cat}
-              <option value={cat}>{cat}</option>
-            {/each}
-          </select>
-        </label>
-        <label>Search
-          <input placeholder="Text in description/category" bind:value={search} />
-        </label>
-      </div>
-    </Totals>
-
-    <ItemsTable items={result.items} filterCategory={selectedCategory} search={search}>
-      <div slot="actions" style="display:flex; gap:.5rem;">
-        <button on:click={exportCSV}>Export CSV</button>
-        <button on:click={clearAll}>Clear</button>
-      </div>
-    </ItemsTable>
-  {/if}
+  <section class="card">
+    <h1>{tt($lang, 'app.upload.title')}</h1>
+    <p class="hint">{tt($lang, 'app.upload.hint')}</p>
+    <UploadForm onResult={onResult} />
+  </section>
 </main>
 
 <style>
-  main { max-width: 1100px; margin: 1rem auto; font-family: system-ui, Arial, sans-serif; padding: 0 1rem; }
-  h1 { margin: 1rem 0; }
-  input, select, button { padding: .4rem .5rem; }
+  main { display:flex; align-items:center; justify-content:center; min-height: calc(100vh - 64px); padding: 1rem; }
+  .card { width: 680px; max-width: 100%; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem 1.5rem; box-shadow: 0 8px 24px var(--shadow-color); }
+  h1 { margin: 0 0 .5rem; font-size: 1.4rem; }
+  .hint { margin: 0 0 1rem; color: var(--muted); }
+  /* Controls are styled within UploadForm component */
 </style>

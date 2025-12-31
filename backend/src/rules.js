@@ -3,10 +3,15 @@ import path from 'path';
 
 const cache = new Map();
 
+function getRulesPath(lang) {
+  const key = (lang || 'en').toLowerCase();
+  return path.join(process.cwd(), 'data', 'rules', `${key}.csv`);
+}
+
 export async function loadRules(lang = 'en') {
   const key = lang.toLowerCase();
   if (cache.has(key)) return cache.get(key);
-  const file = path.join(process.cwd(), 'data', 'rules', `${key}.csv`);
+  const file = getRulesPath(key);
   const txt = await fs.readFile(file, 'utf8');
   const lines = txt.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const rules = lines.map((l) => {
@@ -15,6 +20,47 @@ export async function loadRules(lang = 'en') {
   }).filter((r) => r.pattern);
   cache.set(key, rules);
   return rules;
+}
+
+export async function saveRules(lang = 'en', rules = []) {
+  const key = lang.toLowerCase();
+  const file = getRulesPath(key);
+  const lines = (rules || []).map((r) => `${(r.pattern || '').trim()},${(r.category || '').trim()}`);
+  const txt = lines.join('\n') + (lines.length ? '\n' : '');
+  await fs.writeFile(file, txt, 'utf8');
+  cache.set(key, rules);
+}
+
+export async function addRule(lang = 'en', rule) {
+  const rules = await loadRules(lang);
+  const pattern = (rule?.pattern || '').trim();
+  const category = (rule?.category || '').trim();
+  if (!pattern) throw new Error('pattern is required');
+  const exists = rules.find((r) => r.pattern.toLowerCase() === pattern.toLowerCase());
+  if (exists) throw new Error('rule already exists');
+  const next = [...rules, { pattern, category }];
+  await saveRules(lang, next);
+  return next;
+}
+
+export async function removeRule(lang = 'en', query) {
+  const rules = await loadRules(lang);
+  let next = rules;
+  if (typeof query === 'number') {
+    const idx = query;
+    if (idx < 0 || idx >= rules.length) throw new Error('index out of range');
+    next = rules.filter((_, i) => i !== idx);
+  } else if (typeof query === 'string') {
+    const pattern = query.trim();
+    next = rules.filter((r) => r.pattern.toLowerCase() !== pattern.toLowerCase());
+  } else if (query && query.pattern) {
+    const pattern = String(query.pattern || '').trim();
+    next = rules.filter((r) => r.pattern.toLowerCase() !== pattern.toLowerCase());
+  } else {
+    throw new Error('missing remove criteria');
+  }
+  await saveRules(lang, next);
+  return next;
 }
 
 export function patternToRegex(pattern) {
