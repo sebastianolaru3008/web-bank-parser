@@ -1,0 +1,49 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=8080
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3000}
+    networks:
+      - internal
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - PUBLIC_API_BASE=/api
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PUBLIC_API_BASE=/api
+      - ORIGIN=${ORIGIN:-http://localhost:3000}
+    depends_on:
+      - backend
+    networks:
+      - internal
+
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - 80
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - dokploy-network
+      - internal
+
+networks:
+  dokploy-network:
+    external: true
+  internal:
+    driver: bridge
+    
