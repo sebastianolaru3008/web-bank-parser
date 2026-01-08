@@ -14,7 +14,7 @@ const config = {
             }
         },
         allowedHosts: [
-            "expenses-webparser-smmhnj-1dc82d-31-97-115-27.traefik.me"
+            "expenses.cyberialab.cloud"
         ]
     }
 };
