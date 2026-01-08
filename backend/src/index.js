@@ -5,7 +5,7 @@ import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { parseUploadAndCategorize } from './parser.js';
-import { addRule, loadRules, removeRule } from './rules.js';
+import { addRule, loadRules, removeRule, saveRules, getRulesPath, clearCache } from './rules.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -76,6 +76,56 @@ app.delete('/api/rules', async (req, res) => {
     res.json({ lang, count: rules.length, rules });
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+// Export rules as CSV file download
+app.get('/api/rules/export', async (req, res) => {
+  try {
+    const lang = (req.query.lang || 'en').toString();
+    const rules = await loadRules(lang);
+    const csv = rules.map(r => `${r.pattern},${r.category}`).join('\n') + (rules.length ? '\n' : '');
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="rules-${lang}.csv"`);
+    res.send(csv);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Import rules from uploaded CSV file
+app.post('/api/rules/import', upload.single('file'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'CSV file is required' });
+  }
+  const lang = (req.body.lang || req.query.lang || 'en').toString();
+  const mode = (req.body.mode || req.query.mode || 'replace').toString(); // 'replace' or 'merge'
+  const filePath = req.file.path;
+  
+  try {
+    const txt = fs.readFileSync(filePath, 'utf8');
+    const lines = txt.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const importedRules = lines.map(l => {
+      const [pattern, category] = l.split(',');
+      return { pattern: pattern?.trim() || '', category: (category || '').trim() };
+    }).filter(r => r.pattern);
+
+    let finalRules;
+    if (mode === 'merge') {
+      const existing = await loadRules(lang);
+      const existingPatterns = new Set(existing.map(r => r.pattern.toLowerCase()));
+      const newRules = importedRules.filter(r => !existingPatterns.has(r.pattern.toLowerCase()));
+      finalRules = [...existing, ...newRules];
+    } else {
+      finalRules = importedRules;
+    }
+
+    await saveRules(lang, finalRules);
+    res.json({ lang, count: finalRules.length, rules: finalRules, imported: importedRules.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    try { fs.unlinkSync(filePath); } catch {}
   }
 });
 

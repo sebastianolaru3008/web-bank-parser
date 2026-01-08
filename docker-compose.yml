@@ -36,5 +36,4 @@ services:
 networks:
   default:
     name: web-bank-parser-net
-  dokploy:
     

@@ -3,9 +3,17 @@ import path from 'path';
 
 const cache = new Map();
 
-function getRulesPath(lang) {
+export function getRulesPath(lang) {
   const key = (lang || 'en').toLowerCase();
   return path.join(process.cwd(), 'data', 'rules', `${key}.csv`);
+}
+
+export function clearCache(lang) {
+  if (lang) {
+    cache.delete(lang.toLowerCase());
+  } else {
+    cache.clear();
+  }
 }
 
 export async function loadRules(lang = 'en') {
